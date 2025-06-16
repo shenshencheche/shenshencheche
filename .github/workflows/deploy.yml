@@ -23,12 +23,9 @@ jobs:
       - name: 配置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # 推荐使用 LTS 版本
-          cache: 'pnpm'  # 缓存 pnpm 依赖
-          check-latest: true  # 自动更新到最新小版本
-
-      - name: 安装 pnpm（如果未预装）
-        run: npm install -g pnpm@8  # 指定版本，避免版本不兼容
+          node-version: 20 
+      - name: 安装 pnpm
+        run: npm install -g pnpm  # 用 npm 全局安装 pnpm，使其能被系统找到
 
       - name: 检查依赖文件
         id: check_files
