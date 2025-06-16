@@ -1,40 +1,25 @@
-name: Deploy to GitHub Pages
-
+name: Build and Deploy to GitHub Pages
 on:
   push:
-    branches: [ "main" ]
-
+    branches:
+      - main  # 推送 main 分支触发部署，可改其他分支
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js
+      - name: 拉取代码
+        uses: actions/checkout@v4
+      - name: 配置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build project
-        run: pnpm build
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+          node-version: 20  # 按需选 Node 版本
+      - name: 安装依赖
+        run: npm install
+      - name: 构建项目
+        run: npm run build  # 前端构建命令，按需改
+      - name: 部署到 GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: 'dist'
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+          BRANCH: gh-pages  # 部署到 gh-pages 分支
+          FOLDER: dist       # 静态文件目录，如 build/dist，按需改
