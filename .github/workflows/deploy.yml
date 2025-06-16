@@ -81,7 +81,7 @@ jobs:
         if: ${{ env.is_static_site == 'true' }}
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: gh-pages
           FOLDER: dist  # 静态文件目录
 
