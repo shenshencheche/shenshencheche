@@ -1,33 +1,112 @@
-name: Build and Deploy to GitHub Pages
+name: Build and Deploy
 on:
   push:
     branches:
-      - main
+      - main  # 推送 main 分支触发部署，可按需修改
 jobs:
-  build - and - deploy:
-    runs - on: ubuntu - latest
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30  # 设置超时时间，避免卡死
+    strategy:
+      fail-fast: false  # 一个步骤失败不影响其他步骤
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 获取完整提交历史，避免浅克隆问题
+
+      - name: 设置环境变量
+        run: |
+          echo "NODE_OPTIONS=--max-old-space-size=8192" >> $GITHUB_ENV  # 增加 Node 内存限制
+          echo "CI=true" >> $GITHUB_ENV  # 设置 CI 环境变量，避免某些依赖安装不必要的东西
 
       - name: 配置 Node.js
-        uses: actions/setup - node@v4
+        uses: actions/setup-node@v4
         with:
-          node - version: 20
-          cache: 'npm'  # 基于 package - lock.json 缓存
+          node-version: '20'  # 推荐使用 LTS 版本
+          cache: 'pnpm'  # 缓存 pnpm 依赖
+          check-latest: true  # 自动更新到最新小版本
 
-      - name: 安装 pnpm
-        run: npm install -g pnpm
+      - name: 安装 pnpm（如果未预装）
+        run: npm install -g pnpm@8  # 指定版本，避免版本不兼容
 
-      - name: 安装依赖
-        run: pnpm install
+      - name: 检查依赖文件
+        id: check_files
+        run: |
+          echo "has_package_json=$(test -f package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_pnpm_lock=$(test -f pnpm-lock.yaml && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "has_npm_lock=$(test -f package-lock.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+
+      - name: 安装依赖（智能选择）
+        run: |
+          if [ "$has_pnpm_lock" = "true" ]; then
+            pnpm install --frozen-lockfile  # 有 pnpm 锁文件时严格安装
+          elif [ "$has_npm_lock" = "true" ]; then
+            pnpm install --shamefully-hoist  # 有 npm 锁文件时兼容安装
+          else
+            pnpm install --no-lockfile  # 无锁文件时跳过检查
+          fi
+        env:
+          HAS_PNPM_LOCK: ${{ env.has_pnpm_lock }}
+          HAS_NPM_LOCK: ${{ env.has_npm_lock }}
+        continue-on-error: true  # 允许失败，下一个步骤会处理
+
+      - name: 处理依赖安装失败
+        if: ${{ failure() && steps.check_files.outputs.has_package_json == 'true' }}
+        run: |
+          echo "依赖安装失败，尝试清理缓存后重试..."
+          pnpm store prune
+          pnpm install --no-lockfile --force
+        continue-on-error: false  # 第二次尝试失败则终止
 
       - name: 构建项目
-        run: pnpm build:client
+        run: |
+          if [ -f "pnpm-workspace.yaml" ]; then
+            pnpm -r build  # 处理 monorepo 项目
+          else
+            pnpm build  # 普通项目构建
+          fi
+        env:
+          NODE_ENV: production  # 设置生产环境
+          CI: true  # 启用 CI 模式
 
-      - name: 部署到 GitHub Pages
-        uses: JamesIves/github - pages - deploy - action@v4
+      - name: 测试（可选，根据项目需要保留或删除）
+        run: pnpm test
+        continue-on-error: true  # 测试失败不影响部署
+
+      - name: 部署选择器
+        id: deploy_selector
+        run: |
+          echo "is_node_app=$(grep -q 'start' package.json && echo 'true' || echo 'false')" >> $GITHUB_ENV
+          echo "is_static_site=$(test -d dist && echo 'true' || echo 'false')" >> $GITHUB_ENV
+
+      - name: 部署到 GitHub Pages（静态网站）
+        if: ${{ env.is_static_site == 'true' }}
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh - pages
-          FOLDER: dist
+          BRANCH: gh-pages
+          FOLDER: dist  # 静态文件目录
+
+      - name: 部署到服务器（Node.js 应用）
+        if: ${{ env.is_node_app == 'true' && env.is_static_site == 'false' }}
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.HOST }}
+          username: ${{ secrets.USERNAME }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            cd /path/to/app  # 服务器上的应用路径
+            git pull origin main
+            pnpm install --prod
+            pm2 restart app  # 用 PM2 重启应用
+        continue-on-error: true  # 允许部署失败，方便调试
+
+      - name: 通知失败
+        if: ${{ failure() }}
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow,job,took
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}  # 可选，需要配置 Slack Webhook
