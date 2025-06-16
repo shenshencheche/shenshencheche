@@ -13,4 +13,6 @@ function getPlugins() {
 
 export default defineConfig({
   plugins: getPlugins(),
+  base: '/shenshencheche/', 
+})
 });
