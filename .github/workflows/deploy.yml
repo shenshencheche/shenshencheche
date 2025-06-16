@@ -2,24 +2,35 @@ name: Build and Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # 推送 main 分支触发部署，可改其他分支
+      - main  # 推送 main 分支触发部署，可根据需要修改为其他分支
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
+        
       - name: 配置 Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20  # 按需选 Node 版本
+          node-version: 20  # 根据项目需求选择 Node 版本
+          cache: 'pnpm'     # 缓存 pnpm 依赖，加速后续构建
+          
+      - name: 安装 pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8        # 指定 pnpm 版本
+          run_install: false  # 不自动安装依赖，我们会在下一步手动执行
+          
       - name: 安装依赖
-        run: npm install
+        run: pnpm install
+        
       - name: 构建项目
-        run: npm run build  # 前端构建命令，按需改
+        run: pnpm build:client  # 执行客户端构建命令，根据实际项目修改
+        
       - name: 部署到 GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
-          BRANCH: gh-pages  # 部署到 gh-pages 分支
-          FOLDER: dist       # 静态文件目录，如 build/dist，按需改
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # GitHub 自动注入的 token
+          BRANCH: gh-pages        # 部署到 gh-pages 分支
+          FOLDER: dist            # 构建输出目录，根据实际项目修改
