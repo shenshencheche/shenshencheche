@@ -2,33 +2,32 @@ name: Build and Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main  # 推送 main 分支触发部署
+      - main
 jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
+  build - and - deploy:
+    runs - on: ubuntu - latest
     steps:
       - name: 拉取代码
         uses: actions/checkout@v4
 
       - name: 配置 Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup - node@v4
         with:
-          node-version: 20
-          cache: 'pnpm'  # 使用 pnpm 缓存（即使没有锁文件也可缓存）
-          cache-dependency-path: '**/pnpm-lock.yaml'  # 指定 pnpm 锁文件路径（若无则忽略）
+          node - version: 20
+          cache: 'npm'  # 基于 package - lock.json 缓存
 
       - name: 安装 pnpm
-        run: npm install -g pnpm  # 全局安装 pnpm
+        run: npm install -g pnpm
 
-      - name: 安装依赖（不依赖锁文件）
-        run: pnpm install --no-lockfile  # 关键修改：跳过锁文件检查
+      - name: 安装依赖
+        run: pnpm install
 
       - name: 构建项目
-        run: pnpm build:client  # 执行构建命令
+        run: pnpm build:client
 
       - name: 部署到 GitHub Pages
-        uses: JamesIves/github-pages-deploy-action@v4
+        uses: JamesIves/github - pages - deploy - action@v4
         with:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          BRANCH: gh-pages
-          FOLDER: dist  # 构建输出目录，根据实际项目修改
+          BRANCH: gh - pages
+          FOLDER: dist
